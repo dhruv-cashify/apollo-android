@@ -82,7 +82,7 @@ private fun CodeGenerationAst.ObjectType.writeFragmentToResponseFunSpec(): FunSp
 /**
  * @param valueName: the name of the value holding the different fields
  */
-internal fun List<CodeGenerationAst.Field>.writeCode(valueName: String): CodeBlock {
+private fun List<CodeGenerationAst.Field>.writeCode(valueName: String): CodeBlock {
   val builder = CodeBlock.builder()
   builder.addStatement("writer.beginObject()")
   forEach {

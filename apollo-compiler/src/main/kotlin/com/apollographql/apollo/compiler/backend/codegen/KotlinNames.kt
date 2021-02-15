@@ -16,6 +16,10 @@ internal fun kotlinNameForVariable(variableName: String) = kotlinNameForField(va
 internal fun kotlinNameForAdapterField(type: CodeGenerationAst.FieldType): String {
   return kotlinNameForAdapterFieldRecursive(type).decapitalize() + "Adapter"
 }
+
+internal fun kotlinNameForAdapterVal(type: CodeGenerationAst.FieldType, responseName: String): String {
+  return kotlinNameForAdapterFieldRecursive(type).decapitalize() + "${responseName.escapeKotlinReservedWord().capitalize()}Adapter"
+}
 internal fun kotlinNameForTypeCaseAdapterField(typeRef: CodeGenerationAst.TypeRef): String {
   return typeRef.name.escapeKotlinReservedWord() + "Adapter"
 }

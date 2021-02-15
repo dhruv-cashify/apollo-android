@@ -25,7 +25,12 @@ import java.util.concurrent.TimeUnit
 
 class ApolloServerInterceptorTest {
   private val serverUrl = HttpUrl.parse("http://google.com")!!
-  private val query = AllFilmsQuery(after = Input.optional("some cursor"), before = Input.absent(), first = Input.fromNullable(null), last = Input.optional(100))
+  private val query = AllFilmsQuery(
+      after = Input.optional("some cursor"),
+      before = Input.absent(),
+      first = Input.absent(),
+      last = Input.optional(100)
+  )
 
   @Test
   @Throws(Exception::class)

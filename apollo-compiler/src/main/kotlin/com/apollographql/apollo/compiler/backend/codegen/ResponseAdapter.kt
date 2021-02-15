@@ -70,7 +70,7 @@ private fun CodeGenerationAst.ObjectType.responseAdapterTypeSpec(): TypeSpec {
               .mapNotNull { nestedObject ->
                 when {
                   nestedObject.kind is CodeGenerationAst.ObjectType.Kind.Object ||
-                  (nestedObject.kind is CodeGenerationAst.ObjectType.Kind.Fragment && nestedObject.kind.possibleImplementations.isNotEmpty()) -> {
+                      (nestedObject.kind is CodeGenerationAst.ObjectType.Kind.Fragment && nestedObject.kind.possibleImplementations.isNotEmpty()) -> {
                     nestedObject.responseAdapterTypeSpec()
                   }
                   else -> null
@@ -145,12 +145,12 @@ internal fun List<CodeGenerationAst.Field>.adapterPropertySpecs(): List<Property
   return map { it.type }.toSet().map { it.adapterPropertySpec() }
 }
 
-internal fun adapterInitializer(type: CodeGenerationAst.FieldType): CodeBlock {
+internal fun adapterInitializer(type: CodeGenerationAst.FieldType, responseName: String? = null): CodeBlock {
   if (type.nullable) {
-    return CodeBlock.of("%T(%L)", NullableResponseAdapter::class.asClassName(), adapterInitializer(type.nonNullable()))
+    return CodeBlock.of("%T(%L)", NullableResponseAdapter::class.asClassName(), adapterInitializer(type.nonNullable(), responseName))
   }
   return when (type) {
-    is CodeGenerationAst.FieldType.Array -> CodeBlock.of("%T(%L)", ListResponseAdapter::class.asClassName(), adapterInitializer(type.rawType))
+    is CodeGenerationAst.FieldType.Array -> CodeBlock.of("%T(%L)", ListResponseAdapter::class.asClassName(), adapterInitializer(type.rawType, responseName))
     is CodeGenerationAst.FieldType.Scalar.Boolean -> CodeBlock.of("%M", MemberName("com.apollographql.apollo.api.internal", "booleanResponseAdapter"))
     is CodeGenerationAst.FieldType.Scalar.ID -> CodeBlock.of("%M", MemberName("com.apollographql.apollo.api.internal", "stringResponseAdapter"))
     is CodeGenerationAst.FieldType.Scalar.String -> CodeBlock.of("%M", MemberName("com.apollographql.apollo.api.internal", "stringResponseAdapter"))
@@ -163,7 +163,11 @@ internal fun adapterInitializer(type: CodeGenerationAst.FieldType): CodeBlock {
         ClassName.bestGuess(type.type),
         type.typeRef.asTypeName()
     )
-    is CodeGenerationAst.FieldType.Input -> CodeBlock.of("%T(%L)", InputResponseAdapter::class.asClassName(), adapterInitializer(type.rawType))
+    is CodeGenerationAst.FieldType.Input -> CodeBlock.of("%T(%S, %L)",
+        InputResponseAdapter::class.asClassName(),
+        responseName,
+        adapterInitializer(type.rawType, responseName)
+    )
   }
 }
 
@@ -173,7 +177,7 @@ private fun CodeGenerationAst.FieldType.adapterPropertySpec(): PropertySpec {
           name = kotlinNameForAdapterField(this),
           type = ResponseAdapter::class.asClassName().parameterizedBy(asTypeName())
       )
-      .initializer(adapterInitializer(this))
+      .initializer(adapterInitializer(type = this))
       .build()
 }
 

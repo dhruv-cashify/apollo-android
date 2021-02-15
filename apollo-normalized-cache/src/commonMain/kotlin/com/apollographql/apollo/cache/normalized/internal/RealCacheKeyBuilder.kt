@@ -1,12 +1,14 @@
 package com.apollographql.apollo.cache.normalized.internal
 
 import com.apollographql.apollo.api.CustomScalarAdapters
+import com.apollographql.apollo.api.EnumValue
+import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.api.InputType
 import com.apollographql.apollo.api.Operation
 import com.apollographql.apollo.api.ResponseField
 import com.apollographql.apollo.api.ResponseField.Companion.isArgumentValueVariableType
+import com.apollographql.apollo.api.internal.anyResponseAdapter
 import com.apollographql.apollo.api.internal.json.JsonWriter
-import com.apollographql.apollo.api.internal.json.Utils
 import okio.Buffer
 import okio.IOException
 
@@ -16,58 +18,80 @@ class RealCacheKeyBuilder : CacheKeyBuilder {
     if (field.arguments.isEmpty()) {
       return field.fieldName
     }
-    val resolvedArguments = resolveVariables(field.arguments, variables)
+    val resolvedArguments = field.arguments.resolveVariables(variables)
     return try {
-      val buffer = Buffer()
-      val jsonWriter = JsonWriter.of(buffer)
-      jsonWriter.serializeNulls = true
-      Utils.writeToJson(resolvedArguments, jsonWriter)
-      jsonWriter.close()
-      "${field.fieldName}(${buffer.readUtf8()})"
+      val serializedArguments = Buffer().apply {
+        anyResponseAdapter.toResponse(JsonWriter.of(this), resolvedArguments)
+      }.readUtf8()
+      "${field.fieldName}(${serializedArguments})"
     } catch (e: IOException) {
       throw RuntimeException(e)
     }
   }
 
   @Suppress("UNCHECKED_CAST")
-  private fun resolveVariables(value: Any?, variables: Operation.Variables): Any? {
-    return when (value) {
+  private fun Any?.resolveVariables(variables: Operation.Variables): Any? {
+    return when (this) {
       null -> null
       is Map<*, *> -> {
-        value as Map<String, Any?>
-        if (isArgumentValueVariableType(value)) {
-          resolveVariable(value, variables)
-        } else {
-          value.mapValues {
-            resolveVariables(it.value, variables)
-          }.toList()
-              .sortedBy { it.first }
-              .toMap()
-        }
+        mapNotNull {
+          val value = it.value.resolveVariableIfNeeded(variables)
+          /**
+           * filter out the absent inputs
+           */
+          (it.key as String) to if (value is Input<*>) {
+            if (value.defined) {
+              value.value
+            } else {
+              return@mapNotNull null
+            }
+          } else {
+            value
+          }
+        }.map {
+          it.first to it.second.resolveVariables(variables)
+        }.sortedBy { it.first }
+            .toMap()
+
       }
       is List<*> -> {
-        value.map {
-          resolveVariables(it, variables)
+        map {
+          it.resolveVariables(variables)
         }
       }
-      else -> value
+      else -> this.toJsonAny()
     }
   }
 
-  @Suppress("UNCHECKED_CAST")
-  private fun resolveVariable(objectMap: Map<String, Any?>, variables: Operation.Variables): Any? {
-    val variable = objectMap[ResponseField.VARIABLE_NAME_KEY]
+  private fun Any?.resolveVariableIfNeeded(variables: Operation.Variables): Any? {
+    return if (this is Map<*, *> && isArgumentValueVariableType(this as Map<String, Any?>)) {
+      val variableName = this[ResponseField.VARIABLE_NAME_KEY]
+      return variables.valueMap()[variableName] ?: error("no '$variableName' variable found")
+    } else {
+      this
+    }
+  }
 
-    return when (val resolvedVariable = variables.valueMap()[variable]) {
+  /**
+   * Takes an input type that comes either from default values or operation variables
+   * and turn that into something that we can write as json
+   */
+  private fun Any?.toJsonAny(): Any? {
+    return when (this) {
       is InputType<*> -> {
         // XXX fix custom scalars
         val writer = MapJsonWriter()
-        (resolvedVariable as InputType<Any?>)
+        (this as InputType<Any?>)
             .adapter(customScalarAdapters = CustomScalarAdapters(emptyMap()))
-            .toResponse(writer, resolvedVariable)
+            .toResponse(writer, this)
         writer.root()
       }
-      else -> resolvedVariable
+      is Int -> this
+      is Double -> this
+      is String -> this
+      is Boolean -> this
+      is EnumValue -> this.rawValue
+      else -> error("Cannot serialize argument $this")
     }
   }
 }

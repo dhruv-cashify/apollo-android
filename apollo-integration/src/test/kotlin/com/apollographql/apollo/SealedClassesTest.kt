@@ -1,7 +1,10 @@
 package com.apollographql.apollo
 
+import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.ResponseField
 import com.apollographql.apollo.api.Operation
+import com.apollographql.apollo.api.internal.anyResponseAdapter
+import com.apollographql.apollo.api.internal.json.JsonWriter
 import com.apollographql.apollo.cache.normalized.internal.RealCacheKeyBuilder
 import com.apollographql.apollo.integration.sealedclasses.type.Direction
 import com.google.common.truth.Truth
@@ -30,8 +33,11 @@ class SealedClassesTest {
         emptyList())
 
 
-    val variables = object : Operation.Variables() {
+    val variables = object : Operation.Variables {
       override fun valueMap() = mapOf("direction" to Direction.NORTH)
+      override fun toResponse(writer: JsonWriter, customScalarAdapters: CustomScalarAdapters) {
+        return anyResponseAdapter.toResponse(writer, valueMap())
+      }
     }
     val cacheKey = RealCacheKeyBuilder().build(field, variables)
     Truth.assertThat(cacheKey).isEqualTo("path({\"direction\":\"NORTH\"})")

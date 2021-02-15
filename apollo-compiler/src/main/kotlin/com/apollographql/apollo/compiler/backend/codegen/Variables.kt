@@ -93,10 +93,28 @@ private fun List<CodeGenerationAst.Field>.variablesToResponseSpec(enclosingClass
       .addCode(this.writeCode("this@$enclosingClassName"))
       .build()
 }
+
+/**
+ * @param valueName: the name of the value holding the different fields
+ */
+private fun List<CodeGenerationAst.Field>.writeCode(valueName: String): CodeBlock {
+  val builder = CodeBlock.builder()
+  builder.addStatement("writer.beginObject()")
+  forEach {
+    builder.addStatement(
+        "${kotlinNameForAdapterVal(it.type, it.responseName)}.toResponse(writer, $valueName.${kotlinNameForField(it.responseName)})")
+  }
+  builder.addStatement("writer.endObject()")
+  return builder.build()
+}
+
 private fun List<CodeGenerationAst.Field>.adapterVals(): CodeBlock {
   val builder = CodeBlock.builder()
   forEach {
-    builder.addStatement("val %L = %L", kotlinNameForAdapterField(it.type), adapterInitializer(it.type))
+    builder.addStatement("val %L = %L",
+        kotlinNameForAdapterVal(type = it.type, responseName = it.responseName),
+        adapterInitializer(type = it.type, responseName = it.responseName)
+    )
   }
   return builder.build()
 }

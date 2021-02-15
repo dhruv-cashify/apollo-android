@@ -5,11 +5,13 @@ import com.apollographql.apollo.Utils.immediateExecutor
 import com.apollographql.apollo.Utils.immediateExecutorService
 import com.apollographql.apollo.Utils.readFileToString
 import com.apollographql.apollo.api.CustomScalarAdapter
+import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.api.JsonElement
 import com.apollographql.apollo.api.JsonString
 import com.apollographql.apollo.api.Operation
 import com.apollographql.apollo.api.Response
+import com.apollographql.apollo.api.toJson
 import com.apollographql.apollo.cache.normalized.MemoryCacheFactory
 import com.apollographql.apollo.coroutines.await
 import com.apollographql.apollo.exception.ApolloException
@@ -114,7 +116,7 @@ class IntegrationTest {
 
     assertThat(query.name()).isEqualTo("EpisodeHeroName")
     assertThat(query.queryDocument()).isEqualTo("query EpisodeHeroName(\$episode: Episode) { hero(episode: \$episode) { name } }")
-    assertThat(query.variables().marshal()).isEqualTo("{\"episode\":\"EMPIRE\"}")
+    assertThat(query.variables().toJson(CustomScalarAdapters.DEFAULT)).isEqualTo("{\"episode\":\"EMPIRE\"}")
   }
 
   @Throws(IOException::class)

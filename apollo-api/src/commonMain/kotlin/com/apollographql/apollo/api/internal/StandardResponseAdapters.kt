@@ -45,13 +45,14 @@ class NullableResponseAdapter<T:Any>(private val wrappedAdapter: ResponseAdapter
   }
 }
 
-class InputResponseAdapter<T>(private val wrappedAdapter: ResponseAdapter<T>): ResponseAdapter<Input<T>> {
+class InputResponseAdapter<T>(private val fieldName: String, private val wrappedAdapter: ResponseAdapter<T>): ResponseAdapter<Input<T>> {
   override fun fromResponse(reader: JsonReader): Input<T> {
     throw UnsupportedOperationException("Input value used in output position")
   }
 
   override fun toResponse(writer: JsonWriter, value: Input<T>) {
     if (value.defined){
+      writer.name(fieldName)
       wrappedAdapter.toResponse(writer, value.value as T)
     }
   }
