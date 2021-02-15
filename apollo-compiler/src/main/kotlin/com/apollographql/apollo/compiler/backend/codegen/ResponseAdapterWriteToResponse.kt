@@ -1,5 +1,6 @@
 package com.apollographql.apollo.compiler.backend.codegen
 
+import com.apollographql.apollo.api.internal.ResponseAdapter
 import com.apollographql.apollo.api.internal.json.JsonWriter
 import com.apollographql.apollo.compiler.applyIf
 import com.apollographql.apollo.compiler.backend.ast.CodeGenerationAst
@@ -16,16 +17,19 @@ internal fun CodeGenerationAst.ObjectType.writeToResponseFunSpec(): FunSpec {
   return when (this.kind) {
     is CodeGenerationAst.ObjectType.Kind.Fragment -> writeFragmentToResponseFunSpec()
     is CodeGenerationAst.ObjectType.Kind.FragmentDelegate -> writeFragmentDelegateToResponseFunSpec()
-    else -> writeObjectToResponseFunSpec()
+    else -> fields.writeObjectToResponseFunSpec(!isTypeCase, this.typeRef)
   }
 }
 
-private fun CodeGenerationAst.ObjectType.writeObjectToResponseFunSpec(): FunSpec {
+internal fun List<CodeGenerationAst.Field>.writeObjectToResponseFunSpec(
+    overridesResponseAdapter: Boolean,
+    valueTypeRef: CodeGenerationAst.TypeRef
+): FunSpec {
   return FunSpec.builder("toResponse")
-      .applyIf(!isTypeCase) { addModifiers(KModifier.OVERRIDE) }
+      .applyIf(overridesResponseAdapter) { addModifiers(KModifier.OVERRIDE) }
       .addParameter(ParameterSpec(name = "writer", type = JsonWriter::class.asTypeName()))
-      .addParameter(ParameterSpec(name = "value", type = this.typeRef.asTypeName()))
-      .addCode(this.fields.writeCode())
+      .addParameter(ParameterSpec(name = "value", type = valueTypeRef.asTypeName()))
+      .addCode(this.writeCode())
       .build()
 }
 

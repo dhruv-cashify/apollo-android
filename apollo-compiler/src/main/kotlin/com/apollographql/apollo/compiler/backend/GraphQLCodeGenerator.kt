@@ -69,6 +69,11 @@ internal class GraphQLCodeGenerator(
               .typeSpec(generateAsInternal)
               .fileSpec(typesPackageName)
               .writeTo(outputDir)
+
+          inputType
+              .responseAdapterTypeSpec(generateAsInternal)
+              .fileSpec("${typesPackageName}.adapter")
+              .writeTo(outputDir)
         }
 
     ast.fragmentTypes

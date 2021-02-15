@@ -2,6 +2,7 @@ package com.apollographql.apollo.compiler.backend.codegen
 
 import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.ResponseField
+import com.apollographql.apollo.api.internal.InputResponseAdapter
 import com.apollographql.apollo.api.internal.ListResponseAdapter
 import com.apollographql.apollo.api.internal.NullableResponseAdapter
 import com.apollographql.apollo.api.internal.ResponseAdapter
@@ -56,7 +57,7 @@ private fun CodeGenerationAst.ObjectType.responseAdapterTypeSpec(): TypeSpec {
         if (fields.isNotEmpty()) {
           if (kind is CodeGenerationAst.ObjectType.Kind.Object) {
             addType(companionObjectTypeSpec(this@responseAdapterTypeSpec))
-            addProperties(adapterPropertySpecs(this@responseAdapterTypeSpec))
+            addProperties(this@responseAdapterTypeSpec.fields.adapterPropertySpecs())
           } else if (kind is CodeGenerationAst.ObjectType.Kind.Fragment) {
             addProperties(objectAdapterPropertySpecs(kind))
           }
@@ -140,8 +141,8 @@ private fun responseFieldsPropertySpec(objectType: CodeGenerationAst.ObjectType)
       .build()
 }
 
-private fun adapterPropertySpecs(objectType: CodeGenerationAst.ObjectType): List<PropertySpec> {
-  return objectType.fields.map { it.type }.toSet().map { it.adapterPropertySpec() }
+internal fun List<CodeGenerationAst.Field>.adapterPropertySpecs(): List<PropertySpec> {
+  return map { it.type }.toSet().map { it.adapterPropertySpec() }
 }
 
 private fun adapterInitializer(type: CodeGenerationAst.FieldType): CodeBlock {
@@ -162,6 +163,7 @@ private fun adapterInitializer(type: CodeGenerationAst.FieldType): CodeBlock {
         ClassName.bestGuess(type.type),
         type.typeRef.asTypeName()
     )
+    is CodeGenerationAst.FieldType.Input -> CodeBlock.of("%T(%L)", InputResponseAdapter::class.asClassName(), adapterInitializer(type.rawType))
   }
 }
 
@@ -279,6 +281,7 @@ private fun CodeGenerationAst.FieldType.leafType(): CodeGenerationAst.FieldType 
   is CodeGenerationAst.FieldType.Scalar -> this
   is CodeGenerationAst.FieldType.Object -> this
   is CodeGenerationAst.FieldType.Array -> rawType.leafType()
+  is CodeGenerationAst.FieldType.Input -> rawType.leafType()
 }
 
 private fun conditionsListCode(conditions: Set<CodeGenerationAst.Field.Condition>): CodeBlock {

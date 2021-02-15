@@ -1,32 +1,23 @@
 package com.apollographql.apollo.compiler.backend.codegen
 
+import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.Input
-import com.apollographql.apollo.api.internal.InputFieldMarshaller
-import com.apollographql.apollo.api.internal.InputFieldWriter
+import com.apollographql.apollo.api.internal.ResponseAdapter
+import com.apollographql.apollo.api.internal.json.JsonReader
 import com.apollographql.apollo.compiler.applyIf
 import com.apollographql.apollo.compiler.backend.ast.CodeGenerationAst
 import com.apollographql.apollo.compiler.escapeKotlinReservedWord
+import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
+import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asClassName
-
-internal fun CodeGenerationAst.InputField.asPropertySpec(initializer: CodeBlock): PropertySpec {
-  return PropertySpec
-      .builder(
-          name = name.escapeKotlinReservedWord(),
-          type = type.asTypeName().let { type ->
-            type.takeUnless { type.isNullable } ?: Input::class.asClassName().parameterizedBy(type.copy(nullable = false))
-          }
-      )
-      .apply { if (description.isNotBlank()) addKdoc("%L\n", description) }
-      .apply { initializer(initializer) }
-      .build()
-}
+import com.squareup.kotlinpoet.asTypeName
 
 internal fun CodeGenerationAst.InputType.typeSpec(generateAsInternal: Boolean = false) =
     TypeSpec
@@ -44,8 +35,22 @@ internal fun CodeGenerationAst.InputType.typeSpec(generateAsInternal: Boolean = 
               )
             }
         )
-        .addFunction(marshallerFunSpec)
+        .addFunction(adapterFunSpec())
         .build()
+
+internal fun CodeGenerationAst.InputField.asPropertySpec(initializer: CodeBlock): PropertySpec {
+  return PropertySpec
+      .builder(
+          name = name.escapeKotlinReservedWord(),
+          type = type.asTypeName().let { type ->
+            type.takeUnless { type.isNullable } ?: Input::class.asClassName().parameterizedBy(type.copy(nullable = false))
+          }
+      )
+      .apply { if (description.isNotBlank()) addKdoc("%L\n", description) }
+      .apply { initializer(initializer) }
+      .build()
+}
+
 
 private val CodeGenerationAst.InputType.primaryConstructorSpec: FunSpec
   get() {
@@ -55,7 +60,7 @@ private val CodeGenerationAst.InputType.primaryConstructorSpec: FunSpec
         .build()
   }
 
-private fun CodeGenerationAst.InputField.parameterSpec(): ParameterSpec {
+private fun CodeGenerationAst.Field.parameterSpec(): ParameterSpec {
   val rawTypeName = type.asTypeName()
   val typeName = type.asTypeName().let { type ->
     type.takeUnless { type.isNullable } ?: Input::class.asClassName().parameterizedBy(type.copy(nullable = false))
@@ -75,190 +80,53 @@ private fun CodeGenerationAst.InputField.parameterSpec(): ParameterSpec {
       .build()
 }
 
-private val CodeGenerationAst.InputType.marshallerFunSpec: FunSpec
-  get() {
-    return FunSpec
-        .builder("marshaller")
-        .returns(InputFieldMarshaller::class)
-        .addModifiers(KModifier.OVERRIDE)
-        .addCode(CodeBlock
-            .builder()
-            .beginControlFlow("return %T.invoke { writer ->", InputFieldMarshaller::class)
-            .apply {
-              fields.forEach { field ->
-                add(field.writeCodeBlock(name.escapeKotlinReservedWord()))
-              }
-            }
-            .endControlFlow()
-            .build()
-        ).build()
-  }
-
-internal fun CodeGenerationAst.InputField.writeCodeBlock(thisRef: String): CodeBlock {
-  return when (type) {
-    is CodeGenerationAst.FieldType.Scalar -> when (type) {
-      is CodeGenerationAst.FieldType.Scalar.ID,
-      is CodeGenerationAst.FieldType.Scalar.String -> {
-        if (type.nullable) {
-          CodeBlock.builder()
-              .addStatement("if·(this@%L.%L.defined)·{", thisRef, name.escapeKotlinReservedWord())
-              .indent()
-              .addStatement("writer.writeString(%S, this@%L.%L.value)", schemaName, thisRef, name.escapeKotlinReservedWord())
-              .unindent()
-              .addStatement("}")
-              .build()
-        } else {
-          CodeBlock.of("writer.writeString(%S, this@%L.%L)\n", schemaName, thisRef, name.escapeKotlinReservedWord())
-        }
-      }
-      is CodeGenerationAst.FieldType.Scalar.Int -> {
-        if (type.nullable) {
-          CodeBlock.builder()
-              .addStatement("if·(this@%L.%L.defined)·{", thisRef, name.escapeKotlinReservedWord())
-              .indent()
-              .addStatement(
-                  "writer.writeInt(%S, this@%L.%L.value)",
-                  schemaName,
-                  thisRef,
-                  name.escapeKotlinReservedWord()
-              )
-              .unindent()
-              .addStatement("}")
-              .build()
-        } else {
-          CodeBlock.of("writer.writeInt(%S, this@%L.%L)\n", schemaName, thisRef, name.escapeKotlinReservedWord())
-        }
-      }
-      is CodeGenerationAst.FieldType.Scalar.Boolean -> {
-        if (type.nullable) {
-          CodeBlock.builder()
-              .addStatement("if·(this@%L.%L.defined)·{", thisRef, name.escapeKotlinReservedWord())
-              .indent()
-              .addStatement("writer.writeBoolean(%S, this@%L.%L.value)", schemaName, thisRef, name.escapeKotlinReservedWord())
-              .unindent()
-              .addStatement("}")
-              .build()
-        } else {
-          CodeBlock.of("writer.writeBoolean(%S, this@%L.%L)\n", schemaName, thisRef, name.escapeKotlinReservedWord())
-        }
-      }
-      is CodeGenerationAst.FieldType.Scalar.Float -> {
-        if (type.nullable) {
-          CodeBlock.builder()
-              .addStatement("if·(this@%L.%L.defined)·{", thisRef, name.escapeKotlinReservedWord())
-              .indent()
-              .addStatement("writer.writeDouble(%S, this@%L.%L.value)", schemaName, thisRef, name.escapeKotlinReservedWord())
-              .unindent()
-              .addStatement("}")
-              .build()
-        } else {
-          CodeBlock.of("writer.writeDouble(%S, this@%L.%L)\n", schemaName, thisRef, name.escapeKotlinReservedWord())
-        }
-      }
-      is CodeGenerationAst.FieldType.Scalar.Enum -> {
-        if (type.nullable) {
-          CodeBlock.builder()
-              .addStatement("if·(this@%L.%L.defined)·{", thisRef, name.escapeKotlinReservedWord())
-              .indent()
-              .addStatement("writer.writeString(%S, this@%L.%L.value?.rawValue)", schemaName, thisRef, name.escapeKotlinReservedWord())
-              .unindent()
-              .addStatement("}")
-              .build()
-        } else {
-          CodeBlock.of("writer.writeString(%S, this@%L.%L.rawValue)\n", schemaName, thisRef, name.escapeKotlinReservedWord())
-        }
-      }
-      is CodeGenerationAst.FieldType.Scalar.Custom -> {
-        if (type.nullable) {
-          CodeBlock.builder()
-              .addStatement("if·(this@%L.%L.defined)·{", thisRef, name)
-              .indent()
-              .addStatement(
-                  "writer.writeCustom(%S, %T, this@%L.%L.value)",
-                  schemaName,
-                  type.typeRef.asTypeName(),
-                  thisRef,
-                  name.escapeKotlinReservedWord()
-              )
-              .unindent()
-              .addStatement("}")
-              .build()
-        } else {
-          CodeBlock.of(
-              "writer.writeCustom(%S, %T, this@%L.%L)\n",
-              schemaName,
-              type.typeRef.asTypeName(),
-              thisRef,
-              name.escapeKotlinReservedWord()
-          )
-        }
-      }
-    }
-    is CodeGenerationAst.FieldType.Object -> {
-      if (type.nullable) {
-        CodeBlock.builder()
-            .addStatement("if·(this@%L.%L.defined)·{", thisRef, name.escapeKotlinReservedWord())
-            .indent()
-            .addStatement("writer.writeObject(%S, this@%L.%L.value?.marshaller())", schemaName, thisRef, name.escapeKotlinReservedWord())
-            .unindent()
-            .addStatement("}")
-            .build()
-      } else {
-        CodeBlock.of("writer.writeObject(%S, this@%L.%L.marshaller())\n", schemaName, thisRef, name.escapeKotlinReservedWord())
-      }
-    }
-    is CodeGenerationAst.FieldType.Array -> {
-      val codeBlockBuilder: CodeBlock.Builder = CodeBlock.Builder()
-      if (type.nullable) {
-        codeBlockBuilder
-            .beginControlFlow("if·(this@%L.%L.defined)", thisRef, name)
-            .add("writer.writeList(%S, this@%L.%L.value?.let { value ->\n", schemaName, thisRef, name.escapeKotlinReservedWord())
-            .indent()
-            .beginControlFlow("%T { listItemWriter ->", InputFieldWriter.ListWriter::class)
-            .beginControlFlow("value.forEach·{ value ->")
-            .add(type.rawType.writeListItem())
-            .endControlFlow()
-            .endControlFlow()
-            .unindent()
-            .add("})\n")
-            .endControlFlow()
-      } else {
-        codeBlockBuilder
-            .beginControlFlow("writer.writeList(%S) { listItemWriter ->", schemaName)
-            .beginControlFlow("this@%L.%L.forEach·{ value ->", thisRef, name.escapeKotlinReservedWord())
-            .add(type.rawType.writeListItem())
-            .endControlFlow()
-            .endControlFlow()
-      }
-      codeBlockBuilder.build()
-    }
-  }
+private fun CodeGenerationAst.TypeRef.asInputObjectAdapterTypeName(): TypeName {
+  return ClassName("$packageName.adapter", name + "_ResponseAdapter")
 }
 
-private fun CodeGenerationAst.FieldType.writeListItem(): CodeBlock {
-  return when (this) {
-    is CodeGenerationAst.FieldType.Scalar -> when (this) {
-      is CodeGenerationAst.FieldType.Scalar.ID,
-      is CodeGenerationAst.FieldType.Scalar.String -> CodeBlock.of("listItemWriter.writeString(value)\n")
-      is CodeGenerationAst.FieldType.Scalar.Int -> CodeBlock.of("listItemWriter.writeInt(value)\n")
-      is CodeGenerationAst.FieldType.Scalar.Boolean -> CodeBlock.of("listItemWriter.writeBoolean(value)\n")
-      is CodeGenerationAst.FieldType.Scalar.Float -> CodeBlock.of("listItemWriter.writeDouble(value)\n")
-      is CodeGenerationAst.FieldType.Scalar.Enum -> CodeBlock.of(
-          "listItemWriter.writeString(value%L.rawValue)\n", if (nullable) "?" else ""
+private fun CodeGenerationAst.InputType.adapterFunSpec(): FunSpec {
+  val body = CodeBlock.builder().apply {
+    addStatement("val adapter = customScalarAdapters.getInputObjectAdapter(${name}) {")
+    indent()
+    addStatement("%T(customScalarAdapters)", typeRef.asInputObjectAdapterTypeName())
+    unindent()
+    addStatement("}")
+    addStatement("return adapter")
+  }.build()
+
+  return FunSpec.builder("adapter")
+      .addModifiers(KModifier.OVERRIDE)
+      .addParameter(ParameterSpec.builder("customScalarAdapters", CustomScalarAdapters::class.asTypeName()).build())
+      .returns(ResponseAdapter::class.asClassName().parameterizedBy(typeRef.asTypeName()))
+      .addCode(body)
+      .build()
+
+}
+
+private fun CodeGenerationAst.InputType.readFromResponseFunSpec(): FunSpec {
+  return FunSpec.builder("fromResponse")
+      .returns(this.typeRef.asTypeName())
+      .addParameter(ParameterSpec.builder("reader", JsonReader::class).build())
+      .addModifiers(KModifier.OVERRIDE)
+      .addCode("throw %T(%S)", UnsupportedOperationException::class.asTypeName(), "InputObject used in output position")
+      .build()
+}
+
+internal fun CodeGenerationAst.InputType.responseAdapterTypeSpec(generateAsInternal: Boolean = false): TypeSpec {
+  return TypeSpec.classBuilder(this.name)
+      .primaryConstructor(
+          FunSpec.constructorBuilder()
+              .addParameter(ParameterSpec.builder("customScalarAdapters", CustomScalarAdapters::class.asTypeName()).build())
+              .build()
       )
-      is CodeGenerationAst.FieldType.Scalar.Custom -> CodeBlock.of(
-          "listItemWriter.writeCustom(%T, value)\n", typeRef.asTypeName()
-      )
-    }
-    is CodeGenerationAst.FieldType.Object -> {
-      CodeBlock.of("listItemWriter.writeObject(value%L.marshaller())\n", if (nullable) "?" else "")
-    }
-    is CodeGenerationAst.FieldType.Array -> CodeBlock.builder()
-        .beginControlFlow("listItemWriter.writeList { listItemWriter ->")
-        .beginControlFlow("value%L.forEach·{ value ->", if (nullable) "?" else "")
-        .add(rawType.writeListItem())
-        .endControlFlow()
-        .endControlFlow()
-        .build()
-  }
+      .addSuperinterface(ResponseAdapter::class.asTypeName().parameterizedBy(this@responseAdapterTypeSpec.typeRef.asTypeName()))
+      .apply {
+        if (fields.isNotEmpty()) {
+          addProperties(fields.adapterPropertySpecs())
+        }
+      }
+      .addFunction(readFromResponseFunSpec())
+      .addFunction(fields.writeObjectToResponseFunSpec(true, typeRef))
+      .applyIf(generateAsInternal) { addModifiers(KModifier.INTERNAL) }
+      .build()
 }

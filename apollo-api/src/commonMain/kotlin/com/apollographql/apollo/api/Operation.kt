@@ -68,47 +68,25 @@ interface Operation<D : Operation.Data> {
    * }
    * ```
    */
-  open class Variables {
+  interface Variables {
 
-    open fun valueMap(): Map<String, Any?> {
-      return emptyMap()
-    }
+    fun valueMap(): Map<String, Any?>
 
-    open fun marshaller(): InputFieldMarshaller {
-      return object : InputFieldMarshaller {
-        override fun marshal(writer: InputFieldWriter) {
-          // noop
-        }
-      }
-    }
-
-    /**
-     * Serializes variables as JSON string to be sent to the GraphQL server.
-     */
-    @Throws(IOException::class)
-    fun marshal(): String {
-      return marshal(CustomScalarAdapters.DEFAULT)
-    }
-
-    /**
-     * Serializes variables with provided scalarTypeAdapters [customScalarAdapters] as JSON string to be sent to the GraphQL server.
-     */
-    @Throws(IOException::class)
-    fun marshal(customScalarAdapters: CustomScalarAdapters): String {
-      return Buffer().apply {
-        JsonWriter.of(this).use { jsonWriter ->
-          jsonWriter.serializeNulls = true
-          jsonWriter.beginObject()
-          marshaller().marshal(InputFieldJsonWriter(jsonWriter, customScalarAdapters))
-          jsonWriter.endObject()
-        }
-      }.readUtf8()
-    }
+    fun toResponse(writer: JsonWriter, customScalarAdapters: CustomScalarAdapters)
   }
 
   companion object {
 
     @JvmField
-    val EMPTY_VARIABLES = Variables()
+    val EMPTY_VARIABLES = object :Variables {
+      override fun valueMap(): Map<String, Any?> {
+        return emptyMap()
+      }
+
+      override fun toResponse(writer: JsonWriter, customScalarAdapters: CustomScalarAdapters) {
+        // write nothing
+      }
+
+    }
   }
 }

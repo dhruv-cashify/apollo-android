@@ -1,5 +1,6 @@
 package com.apollographql.apollo.api.internal
 
+import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.api.internal.json.JsonReader
 import com.apollographql.apollo.api.internal.json.JsonWriter
 
@@ -41,6 +42,19 @@ class NullableResponseAdapter<T:Any>(private val wrappedAdapter: ResponseAdapter
     }
   }
 }
+
+class InputResponseAdapter<T>(private val wrappedAdapter: ResponseAdapter<T>): ResponseAdapter<Input<T>> {
+  override fun fromResponse(reader: JsonReader): Input<T> {
+    throw UnsupportedOperationException("Input value used in output position")
+  }
+
+  override fun toResponse(writer: JsonWriter, value: Input<T>) {
+    if (value.defined){
+      wrappedAdapter.toResponse(writer, value.value as T)
+    }
+  }
+}
+
 
 object stringResponseAdapter: ResponseAdapter<String> {
   override fun fromResponse(reader: JsonReader): String {

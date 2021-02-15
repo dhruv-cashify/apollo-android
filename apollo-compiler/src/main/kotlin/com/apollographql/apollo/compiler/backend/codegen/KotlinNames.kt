@@ -26,6 +26,7 @@ private fun kotlinNameForAdapterFieldRecursive(type: CodeGenerationAst.FieldType
 
   return when (type) {
     is CodeGenerationAst.FieldType.Array -> "ListOf" + kotlinNameForAdapterFieldRecursive(type.rawType)
+    is CodeGenerationAst.FieldType.Input -> "InputOf" + kotlinNameForAdapterFieldRecursive(type.rawType)
     is CodeGenerationAst.FieldType.Object -> type.typeRef.name.capitalize()
     is CodeGenerationAst.FieldType.Scalar -> type.schemaTypeName.capitalize()
   }

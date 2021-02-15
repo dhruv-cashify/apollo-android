@@ -108,21 +108,26 @@ internal class AstBuilder private constructor(
                 val fieldSchemaTypeRef = inputSchemaType.resolveInputField(field.name).type
                 val fieldName = field.name.toLowerCamelCase()
                 val fieldType = fieldSchemaTypeRef.resolveInputFieldType(
-                    typesPackageName = typesPackageName,
+                    typesPackageName = typesPackageName
                 )
                 val deprecationReason = field.deprecationReason?.takeIf { field.isDeprecated }
                 val defaultValue = field.defaultValue
                     .takeUnless { fieldType.isCustomScalarField() }
                     ?.normalizeDefaultValue(fieldSchemaTypeRef)
-                CodeGenerationAst.InputField(
+                CodeGenerationAst.Field(
                     name = fieldName,
                     schemaName = field.name,
                     deprecationReason = deprecationReason,
                     type = fieldType,
                     description = field.description ?: "",
                     defaultValue = defaultValue,
+                    arguments = emptyMap(),
+                    responseName = fieldName,
+                    conditions = emptySet(),
+                    override = false,
                 )
-              }
+              },
+              typeRef = CodeGenerationAst.TypeRef(enclosingType = null, packageName = typesPackageName, name = name)
           )
         }
   }
@@ -154,6 +159,12 @@ internal class AstBuilder private constructor(
 
   private fun IntrospectionSchema.TypeRef.resolveInputFieldType(typesPackageName: String): CodeGenerationAst.FieldType {
     return when (this.kind) {
+      IntrospectionSchema.Kind.NON_NULL -> this.ofType!!.resolveInputFieldType(
+          typesPackageName = typesPackageName
+      ).let {
+        (it as CodeGenerationAst.FieldType.Input).rawType
+      }
+
       IntrospectionSchema.Kind.ENUM -> CodeGenerationAst.FieldType.Scalar.Enum(
           nullable = true,
           typeRef = CodeGenerationAst.TypeRef(
@@ -191,14 +202,10 @@ internal class AstBuilder private constructor(
         }
       }
 
-      IntrospectionSchema.Kind.NON_NULL -> this.ofType!!.resolveInputFieldType(
-          typesPackageName = typesPackageName,
-      ).nonNullable()
-
       IntrospectionSchema.Kind.LIST -> CodeGenerationAst.FieldType.Array(
           nullable = true,
           rawType = this.ofType!!.resolveInputFieldType(
-              typesPackageName = typesPackageName,
+              typesPackageName = typesPackageName
           ),
       )
 
@@ -330,7 +337,7 @@ internal class AstBuilder private constructor(
 
   private fun BackendIr.Variable.toAst(): CodeGenerationAst.InputField {
     val fieldType = type.resolveInputFieldType(
-        typesPackageName = typesPackageName,
+        typesPackageName = typesPackageName
     )
     return CodeGenerationAst.InputField(
         name = name.toLowerCamelCase(),

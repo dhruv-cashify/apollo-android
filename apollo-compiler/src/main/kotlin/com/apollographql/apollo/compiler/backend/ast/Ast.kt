@@ -90,7 +90,12 @@ internal data class CodeGenerationAst(
       val deprecationReason: String?,
       val arguments: Map<String, Any?>,
       val conditions: Set<Condition>,
-      val override: Boolean
+      val override: Boolean,
+      /**
+       * only used for input types
+       */
+      val defaultValue: Any? = null,
+      val isInput: Boolean = false,
   ) {
     sealed class Condition {
       data class Directive(val variableName: String, val inverted: Boolean) : Condition()
@@ -102,7 +107,11 @@ internal data class CodeGenerationAst(
       val name: String,
       val description: String,
       val deprecationReason: String?,
-      val fields: List<InputField>
+      /**
+       * Doesn't use InputField to be able to factor the response adapter code
+       */
+      val fields: List<Field>,
+      val typeRef: TypeRef
   )
 
   data class InputField(
@@ -142,6 +151,7 @@ internal data class CodeGenerationAst(
         is Scalar.Custom -> copy(nullable = false)
         is Object -> copy(nullable = false)
         is Array -> copy(nullable = false)
+        is Input -> this.rawType
       }
     }
 
@@ -156,6 +166,7 @@ internal data class CodeGenerationAst(
         is Scalar.Custom -> copy(nullable = true)
         is Object -> copy(nullable = true)
         is Array -> copy(nullable = true)
+        is Input -> this // already nullable
       }
     }
 
@@ -219,6 +230,15 @@ internal data class CodeGenerationAst(
     ) : FieldType() {
       val leafType: FieldType
         get() = if (rawType is Array) rawType.leafType else rawType
+    }
+
+    /**
+     * an input field in an input object type
+     */
+    data class Input(
+        val rawType: FieldType
+    ) : FieldType() {
+      override val nullable = false
     }
   }
 

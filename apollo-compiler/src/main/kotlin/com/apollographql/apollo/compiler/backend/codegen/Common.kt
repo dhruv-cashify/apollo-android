@@ -35,6 +35,7 @@ internal fun CodeGenerationAst.FieldType.asTypeName(): TypeName {
     }
     is CodeGenerationAst.FieldType.Object -> typeRef.asTypeName()
     is CodeGenerationAst.FieldType.Array -> List::class.asClassName().parameterizedBy(rawType.asTypeName())
+    is CodeGenerationAst.FieldType.Input -> CodeGenerationAst.FieldType.Input::class.asClassName().parameterizedBy(rawType.asTypeName())
   }.copy(nullable = nullable)
 }
 

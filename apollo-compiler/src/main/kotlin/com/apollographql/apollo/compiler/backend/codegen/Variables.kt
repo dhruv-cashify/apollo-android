@@ -38,7 +38,7 @@ private fun List<CodeGenerationAst.InputField>.variablePropertySpec(enclosingCla
     .initializer("%L", TypeSpec.anonymousClassBuilder()
         .superclass(Operation.Variables::class)
         .addFunction(variablesValueMapSpec(enclosingClassName))
-        .addFunction(variablesMarshallerSpec(enclosingClassName.escapeKotlinReservedWord()))
+        .addFunction(variablesAdapterSpec(enclosingClassName.escapeKotlinReservedWord()))
         .build()
     )
     .build()
@@ -83,7 +83,7 @@ private fun List<CodeGenerationAst.InputField>.variablesValueMapSpec(enclosingCl
       .build()
 }
 
-private fun List<CodeGenerationAst.InputField>.variablesMarshallerSpec(thisRef: String): FunSpec {
+private fun List<CodeGenerationAst.InputField>.variablesAdapterSpec(thisRef: String): FunSpec {
   return FunSpec
       .builder("marshaller")
       .returns(InputFieldMarshaller::class)
