@@ -145,7 +145,7 @@ internal fun List<CodeGenerationAst.Field>.adapterPropertySpecs(): List<Property
   return map { it.type }.toSet().map { it.adapterPropertySpec() }
 }
 
-private fun adapterInitializer(type: CodeGenerationAst.FieldType): CodeBlock {
+internal fun adapterInitializer(type: CodeGenerationAst.FieldType): CodeBlock {
   if (type.nullable) {
     return CodeBlock.of("%T(%L)", NullableResponseAdapter::class.asClassName(), adapterInitializer(type.nonNullable()))
   }

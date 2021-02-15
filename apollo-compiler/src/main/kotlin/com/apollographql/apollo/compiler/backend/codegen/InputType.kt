@@ -1,7 +1,6 @@
 package com.apollographql.apollo.compiler.backend.codegen
 
 import com.apollographql.apollo.api.CustomScalarAdapters
-import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.api.internal.ResponseAdapter
 import com.apollographql.apollo.api.internal.json.JsonReader
 import com.apollographql.apollo.compiler.applyIf
@@ -13,7 +12,6 @@ import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asClassName
@@ -26,7 +24,7 @@ internal fun CodeGenerationAst.InputType.typeSpec(generateAsInternal: Boolean = 
         .applyIf(generateAsInternal) { addModifiers(KModifier.INTERNAL) }
         .addAnnotation(suppressWarningsAnnotation)
         .addModifiers(KModifier.DATA)
-        .addSuperinterface(com.apollographql.apollo.api.InputType::class)
+        .addSuperinterface(com.apollographql.apollo.api.InputType::class.asClassName().parameterizedBy(typeRef.asTypeName()))
         .primaryConstructor(primaryConstructorSpec)
         .addProperties(
             fields.map { field ->
@@ -38,19 +36,6 @@ internal fun CodeGenerationAst.InputType.typeSpec(generateAsInternal: Boolean = 
         .addFunction(adapterFunSpec())
         .build()
 
-internal fun CodeGenerationAst.InputField.asPropertySpec(initializer: CodeBlock): PropertySpec {
-  return PropertySpec
-      .builder(
-          name = name.escapeKotlinReservedWord(),
-          type = type.asTypeName().let { type ->
-            type.takeUnless { type.isNullable } ?: Input::class.asClassName().parameterizedBy(type.copy(nullable = false))
-          }
-      )
-      .apply { if (description.isNotBlank()) addKdoc("%L\n", description) }
-      .apply { initializer(initializer) }
-      .build()
-}
-
 
 private val CodeGenerationAst.InputType.primaryConstructorSpec: FunSpec
   get() {
@@ -61,32 +46,20 @@ private val CodeGenerationAst.InputType.primaryConstructorSpec: FunSpec
   }
 
 private fun CodeGenerationAst.Field.parameterSpec(): ParameterSpec {
-  val rawTypeName = type.asTypeName()
-  val typeName = type.asTypeName().let { type ->
-    type.takeUnless { type.isNullable } ?: Input::class.asClassName().parameterizedBy(type.copy(nullable = false))
-  }
-  val defaultValue = defaultValue
-      ?.toDefaultValueCodeBlock(typeName = rawTypeName, fieldType = type)
-      .let { code ->
-        if (type.nullable) {
-          code?.let { CodeBlock.of("%T.optional(%L)", Input::class, it) } ?: CodeBlock.of("%T.absent()", Input::class)
-        } else {
-          code
-        }
-      }
+  val defaultValue = defaultValue.toDefaultValueCodeBlock(fieldType = type)
   return ParameterSpec
-      .builder(name = name.escapeKotlinReservedWord(), type = typeName)
+      .builder(name = name.escapeKotlinReservedWord(), type = type.asTypeName())
       .applyIf(defaultValue != null) { defaultValue(defaultValue!!) }
       .build()
 }
 
 private fun CodeGenerationAst.TypeRef.asInputObjectAdapterTypeName(): TypeName {
-  return ClassName("$packageName.adapter", name + "_ResponseAdapter")
+  return ClassName("$packageName.adapter", kotlinNameForResponseAdapter(name))
 }
 
 private fun CodeGenerationAst.InputType.adapterFunSpec(): FunSpec {
   val body = CodeBlock.builder().apply {
-    addStatement("val adapter = customScalarAdapters.getInputObjectAdapter(${name}) {")
+    addStatement("val adapter = customScalarAdapters.getInputObjectAdapter(%S) {", name)
     indent()
     addStatement("%T(customScalarAdapters)", typeRef.asInputObjectAdapterTypeName())
     unindent()
@@ -113,7 +86,8 @@ private fun CodeGenerationAst.InputType.readFromResponseFunSpec(): FunSpec {
 }
 
 internal fun CodeGenerationAst.InputType.responseAdapterTypeSpec(generateAsInternal: Boolean = false): TypeSpec {
-  return TypeSpec.classBuilder(this.name)
+
+  return TypeSpec.classBuilder(kotlinNameForResponseAdapter(this.graphqlName))
       .primaryConstructor(
           FunSpec.constructorBuilder()
               .addParameter(ParameterSpec.builder("customScalarAdapters", CustomScalarAdapters::class.asTypeName()).build())

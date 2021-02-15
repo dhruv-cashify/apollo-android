@@ -1,5 +1,6 @@
 package com.apollographql.apollo.compiler.backend.codegen
 
+import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.compiler.applyIf
 import com.apollographql.apollo.compiler.backend.ast.CodeGenerationAst
 import com.apollographql.apollo.compiler.escapeKotlinReservedWord
@@ -35,7 +36,7 @@ internal fun CodeGenerationAst.FieldType.asTypeName(): TypeName {
     }
     is CodeGenerationAst.FieldType.Object -> typeRef.asTypeName()
     is CodeGenerationAst.FieldType.Array -> List::class.asClassName().parameterizedBy(rawType.asTypeName())
-    is CodeGenerationAst.FieldType.Input -> CodeGenerationAst.FieldType.Input::class.asClassName().parameterizedBy(rawType.asTypeName())
+    is CodeGenerationAst.FieldType.Input -> Input::class.asClassName().parameterizedBy(rawType.asTypeName())
   }.copy(nullable = nullable)
 }
 
@@ -49,29 +50,52 @@ internal fun CodeGenerationAst.TypeRef.asTypeName(): ClassName {
   }
 }
 
-internal fun Any.toDefaultValueCodeBlock(typeName: TypeName, fieldType: CodeGenerationAst.FieldType): CodeBlock {
-  return when {
-    this is Number -> CodeBlock.of("%L%L", castTo(typeName), if (typeName == LONG) "L" else "")
-    fieldType is CodeGenerationAst.FieldType.Scalar.Enum -> CodeBlock.of("%T.%L", typeName.copy(nullable = false), kotlinNameForEnumValue(this.toString()))
-    fieldType is CodeGenerationAst.FieldType.Array -> {
+internal fun Any?.toDefaultValueCodeBlock(fieldType: CodeGenerationAst.FieldType): CodeBlock? {
+  val default = toDefaultValueCodeBlockRecursive(fieldType)
+  if (default == null && fieldType is CodeGenerationAst.FieldType.Input) {
+    // we have an optional input, default to absent
+    return CodeBlock.of("%T.absent()", Input::class)
+  }
+  return default
+}
+
+internal fun Any?.toDefaultValueCodeBlockRecursive(fieldType: CodeGenerationAst.FieldType): CodeBlock? {
+  if (this == null) {
+    // either no default value or we can't encode it
+    return null
+  }
+
+  if (fieldType is CodeGenerationAst.FieldType.Input) {
+    // TODO: double check this, is there a valid use case to have a "null" default value?
+    return toDefaultValueCodeBlockRecursive(fieldType.rawType)?.let { CodeBlock.of("%T.optional(%L)", Input::class, it) }
+  }
+
+  return when (fieldType) {
+    is CodeGenerationAst.FieldType.Scalar.Int -> CodeBlock.of("%L", toString())
+    is CodeGenerationAst.FieldType.Scalar.Float -> CodeBlock.of("%L", toString())    // Should we coerce here?
+    is CodeGenerationAst.FieldType.Scalar.Boolean -> CodeBlock.of("%L", this.toString())
+    is CodeGenerationAst.FieldType.Scalar.String -> CodeBlock.of("%S", this)
+    is CodeGenerationAst.FieldType.Scalar.ID -> CodeBlock.of("%S", this)
+    is CodeGenerationAst.FieldType.Scalar.Enum -> CodeBlock.of("%T.%L", fieldType.typeRef.asTypeName(), kotlinNameForEnumValue(this.toString()))
+    is CodeGenerationAst.FieldType.Scalar.Custom,
+    is CodeGenerationAst.FieldType.Input -> null // We don't have the adapter available so don't support
+    is CodeGenerationAst.FieldType.Array -> {
       @Suppress("UNCHECKED_CAST")
-      (this as List<Any>).toDefaultValueCodeBlock(typeName, fieldType.rawType)
+      (this as List<Any>).toDefaultValueCodeBlockList(fieldType.rawType)
     }
-    this !is String -> CodeBlock.of("%L", this)
-    else -> CodeBlock.of("%S", this)
+    is CodeGenerationAst.FieldType.Object -> error("output type '${fieldType.schemaTypeName}' used in input position")
   }
 }
 
-private fun List<Any>.toDefaultValueCodeBlock(typeName: TypeName, fieldType: CodeGenerationAst.FieldType): CodeBlock {
+private fun List<Any>.toDefaultValueCodeBlockList(fieldType: CodeGenerationAst.FieldType): CodeBlock? {
   return if (isEmpty()) {
     CodeBlock.of("emptyList()")
   } else {
-    filterNotNull()
-        .map { value ->
-          val rawTypeName = (typeName as ParameterizedTypeName).typeArguments.first().copy(nullable = false)
-          value.toDefaultValueCodeBlock(rawTypeName, fieldType)
-        }
-        .joinToCode(prefix = "listOf(", separator = ", ", suffix = ")")
+    val codeBlocks = map { value ->
+      // there's something we cannot encode in there, skip
+      value.toDefaultValueCodeBlockRecursive(fieldType) ?: return null
+    }
+    return codeBlocks.joinToCode(prefix = "listOf(", separator = ", ", suffix = ")")
   }
 }
 

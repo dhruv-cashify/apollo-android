@@ -34,7 +34,7 @@ internal data class CodeGenerationAst(
       val description: String,
       val operationId: String,
       val queryDocument: String,
-      val variables: List<InputField>,
+      val variables: List<Field>,
       val dataType: ObjectType,
   ) {
     enum class Type {
@@ -47,7 +47,7 @@ internal data class CodeGenerationAst(
       val interfaceType: ObjectType,
       val implementationType: ObjectType,
       val fragmentDefinition: String,
-      val variables: List<InputField>,
+      val variables: List<Field>,
   )
 
   data class ObjectType(
@@ -83,6 +83,10 @@ internal data class CodeGenerationAst(
 
   data class Field(
       val name: String,
+      /**
+       * for object fields, this is the schema name or alias if it's defined
+       * for input object fields, this is the schema name
+       */
       val responseName: String,
       val schemaName: String,
       val type: FieldType,

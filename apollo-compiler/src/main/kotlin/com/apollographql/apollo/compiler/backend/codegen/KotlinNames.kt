@@ -11,13 +11,16 @@ import com.apollographql.apollo.compiler.escapeKotlinReservedWord
  */
 internal fun kotlinNameForEnumValue(graphqlEnumValue: String) = graphqlEnumValue.toUpperCase()
 internal fun kotlinNameForEnum(graphqlEnum: String) = graphqlEnum.escapeKotlinReservedWord()
-internal fun kotlinNameForField(responseName: String) = responseName.escapeKotlinReservedWord()
+internal fun kotlinNameForField(responseName: String) = responseName.decapitalize().escapeKotlinReservedWord()
+internal fun kotlinNameForVariable(variableName: String) = kotlinNameForField(variableName)
 internal fun kotlinNameForAdapterField(type: CodeGenerationAst.FieldType): String {
   return kotlinNameForAdapterFieldRecursive(type).decapitalize() + "Adapter"
 }
 internal fun kotlinNameForTypeCaseAdapterField(typeRef: CodeGenerationAst.TypeRef): String {
   return typeRef.name.escapeKotlinReservedWord() + "Adapter"
 }
+internal fun kotlinNameForResponseAdapter(graphqlName: String) = "${graphqlName.capitalize()}_ResponseAdapter"
+
 
 private fun kotlinNameForAdapterFieldRecursive(type: CodeGenerationAst.FieldType): String {
   if (type.nullable) {

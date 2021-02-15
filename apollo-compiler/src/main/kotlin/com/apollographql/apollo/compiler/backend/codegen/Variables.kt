@@ -1,8 +1,9 @@
 package com.apollographql.apollo.compiler.backend.codegen
 
+import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.api.Operation
-import com.apollographql.apollo.api.internal.InputFieldMarshaller
+import com.apollographql.apollo.api.internal.json.JsonWriter
 import com.apollographql.apollo.compiler.applyIf
 import com.apollographql.apollo.compiler.backend.ast.CodeGenerationAst
 import com.apollographql.apollo.compiler.escapeKotlinReservedWord
@@ -14,37 +15,36 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.asClassName
+import com.squareup.kotlinpoet.asTypeName
 import com.squareup.kotlinpoet.joinToCode
 
-private fun List<CodeGenerationAst.InputField>.constructorFunSpec() = FunSpec
+private fun List<CodeGenerationAst.Field>.constructorFunSpec() = FunSpec
     .constructorBuilder()
     .addParameters(map { variable ->
       ParameterSpec
           .builder(
               name = variable.name.escapeKotlinReservedWord(),
-              type = variable.type.asTypeName().let { type ->
-                if (type.isNullable) Input::class.asClassName().parameterizedBy(type.copy(nullable = false)) else type
-              }
+              type = variable.type.asTypeName()
           )
           .applyIf(variable.type.nullable) { defaultValue("%T.absent()", Input::class.asClassName()) }
           .build()
     })
     .build()
 
-private fun List<CodeGenerationAst.InputField>.variablePropertySpec(enclosingClassName: String) = PropertySpec
+private fun List<CodeGenerationAst.Field>.variablePropertySpec(enclosingClassName: String) = PropertySpec
     .builder("variables", Operation.Variables::class)
     .addModifiers(KModifier.PRIVATE)
     .addAnnotation(Transient::class)
     .initializer("%L", TypeSpec.anonymousClassBuilder()
-        .superclass(Operation.Variables::class)
+        .addSuperinterface(Operation.Variables::class)
         .addFunction(variablesValueMapSpec(enclosingClassName))
-        .addFunction(variablesAdapterSpec(enclosingClassName.escapeKotlinReservedWord()))
+        .addFunction(variablesToResponseSpec(enclosingClassName))
         .build()
     )
     .build()
 
 
-private fun List<CodeGenerationAst.InputField>.variablesValueMapSpec(enclosingClassName: String): FunSpec {
+private fun List<CodeGenerationAst.Field>.variablesValueMapSpec(enclosingClassName: String): FunSpec {
   return FunSpec
       .builder("valueMap")
       .addModifiers(KModifier.OVERRIDE)
@@ -83,22 +83,25 @@ private fun List<CodeGenerationAst.InputField>.variablesValueMapSpec(enclosingCl
       .build()
 }
 
-private fun List<CodeGenerationAst.InputField>.variablesAdapterSpec(thisRef: String): FunSpec {
+private fun List<CodeGenerationAst.Field>.variablesToResponseSpec(enclosingClassName: String): FunSpec {
   return FunSpec
-      .builder("marshaller")
-      .returns(InputFieldMarshaller::class)
+      .builder("toResponse")
       .addModifiers(KModifier.OVERRIDE)
-      .addCode(CodeBlock
-          .builder()
-          .beginControlFlow("return·%T.invoke·{ writer ->", InputFieldMarshaller::class)
-          .apply { forEach { field -> add(field.writeCodeBlock(thisRef)) } }
-          .endControlFlow()
-          .build()
-      )
+      .addParameter("writer", JsonWriter::class.asTypeName())
+      .addParameter("customScalarAdapters", CustomScalarAdapters::class.asTypeName())
+      .addCode(this.adapterVals())
+      .addCode(this.writeCode("this@$enclosingClassName"))
       .build()
 }
+private fun List<CodeGenerationAst.Field>.adapterVals(): CodeBlock {
+  val builder = CodeBlock.builder()
+  forEach {
+    builder.addStatement("val %L = %L", kotlinNameForAdapterField(it.type), adapterInitializer(it.type))
+  }
+  return builder.build()
+}
 
-internal fun List<CodeGenerationAst.InputField>.variablesFunSpec() = FunSpec.builder("variables")
+internal fun List<CodeGenerationAst.Field>.variablesFunSpec() = FunSpec.builder("variables")
     .addModifiers(KModifier.OVERRIDE)
     .returns(Operation.Variables::class.asClassName())
     .apply {
@@ -110,7 +113,7 @@ internal fun List<CodeGenerationAst.InputField>.variablesFunSpec() = FunSpec.bui
     }
     .build()
 
-internal fun TypeSpec.Builder.addVariablesIfNeeded(variables: List<CodeGenerationAst.InputField>, enclosingClassName: String) = applyIf(variables.isNotEmpty()) {
+internal fun TypeSpec.Builder.addVariablesIfNeeded(variables: List<CodeGenerationAst.Field>, enclosingClassName: String) = applyIf(variables.isNotEmpty()) {
   addModifiers(KModifier.DATA)
   primaryConstructor(variables.constructorFunSpec())
   addProperties(variables.map { variable -> variable.asPropertySpec(CodeBlock.of(variable.name.escapeKotlinReservedWord())) })

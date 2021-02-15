@@ -3,6 +3,8 @@ package com.apollographql.apollo.api.internal
 import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.api.internal.json.JsonReader
 import com.apollographql.apollo.api.internal.json.JsonWriter
+import com.apollographql.apollo.api.internal.json.Utils
+import com.apollographql.apollo.api.internal.json.Utils.readRecursively
 
 class ListResponseAdapter<T>(private val wrappedAdapter: ResponseAdapter<T>): ResponseAdapter<List<T>> {
   override fun fromResponse(reader: JsonReader): List<T> {
@@ -96,12 +98,12 @@ object booleanResponseAdapter: ResponseAdapter<Boolean> {
   }
 }
 
-object anyResponseAdapter: ResponseAdapter<Boolean> {
-  override fun fromResponse(reader: JsonReader): Boolean {
-    return reader.nextBoolean()
+object anyResponseAdapter: ResponseAdapter<Any?> {
+  override fun fromResponse(reader: JsonReader): Any? {
+    return reader.readRecursively()
   }
 
-  override fun toResponse(writer: JsonWriter, value: Boolean) {
-    writer.value(value)
+  override fun toResponse(writer: JsonWriter, value: Any?) {
+    Utils.writeToJson(value, writer)
   }
 }

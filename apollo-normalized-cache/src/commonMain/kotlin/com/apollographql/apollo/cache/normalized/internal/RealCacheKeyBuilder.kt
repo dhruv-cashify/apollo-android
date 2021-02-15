@@ -1,5 +1,6 @@
 package com.apollographql.apollo.cache.normalized.internal
 
+import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.InputType
 import com.apollographql.apollo.api.Operation
 import com.apollographql.apollo.api.ResponseField
@@ -58,10 +59,13 @@ class RealCacheKeyBuilder : CacheKeyBuilder {
     val variable = objectMap[ResponseField.VARIABLE_NAME_KEY]
 
     return when (val resolvedVariable = variables.valueMap()[variable]) {
-      is InputType -> {
-        val inputFieldMapWriter = SortedInputFieldMapWriter()
-        resolvedVariable.marshaller().marshal(inputFieldMapWriter)
-        inputFieldMapWriter.map()
+      is InputType<*> -> {
+        // XXX fix custom scalars
+        val writer = MapJsonWriter()
+        (resolvedVariable as InputType<Any?>)
+            .adapter(customScalarAdapters = CustomScalarAdapters(emptyMap()))
+            .toResponse(writer, resolvedVariable)
+        writer.root()
       }
       else -> resolvedVariable
     }

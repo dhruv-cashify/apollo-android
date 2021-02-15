@@ -4,6 +4,7 @@ import com.apollographql.apollo.api.Operation
 import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.internal.json.JsonWriter
 import com.apollographql.apollo.api.internal.json.use
+import com.apollographql.apollo.api.toJson
 import okio.Buffer
 import okio.ByteString
 import kotlin.jvm.JvmStatic
@@ -23,7 +24,7 @@ object OperationRequestBodyComposer {
         serializeNulls = true
         beginObject()
         name("operationName").value(operation.name())
-        name("variables").jsonValue(operation.variables().marshal(customScalarAdapters))
+        name("variables").jsonValue(operation.variables().toJson(customScalarAdapters))
         if (autoPersistQueries) {
           name("extensions")
           beginObject()

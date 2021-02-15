@@ -29,7 +29,7 @@ internal fun List<CodeGenerationAst.Field>.writeObjectToResponseFunSpec(
       .applyIf(overridesResponseAdapter) { addModifiers(KModifier.OVERRIDE) }
       .addParameter(ParameterSpec(name = "writer", type = JsonWriter::class.asTypeName()))
       .addParameter(ParameterSpec(name = "value", type = valueTypeRef.asTypeName()))
-      .addCode(this.writeCode())
+      .addCode(this.writeCode("value"))
       .build()
 }
 
@@ -53,7 +53,7 @@ private fun CodeGenerationAst.ObjectType.writeFragmentToResponseFunSpec(): FunSp
       .addParameter(ParameterSpec(name = "value", type = this.typeRef.asTypeName()))
       .applyIf(possibleImplementations.isEmpty()) {
         addCode(
-            this@writeFragmentToResponseFunSpec.fields.writeCode()
+            this@writeFragmentToResponseFunSpec.fields.writeCode("value")
         )
       }
       .applyIf(possibleImplementations.isNotEmpty()) {
@@ -79,18 +79,22 @@ private fun CodeGenerationAst.ObjectType.writeFragmentToResponseFunSpec(): FunSp
       .build()
 }
 
-internal fun List<CodeGenerationAst.Field>.writeCode(): CodeBlock {
+/**
+ * @param valueName: the name of the value holding the different fields
+ */
+internal fun List<CodeGenerationAst.Field>.writeCode(valueName: String): CodeBlock {
   val builder = CodeBlock.builder()
   builder.addStatement("writer.beginObject()")
   forEach {
-    builder.add(it.writeCode())
+    builder.add(it.writeCode(valueName))
   }
   builder.addStatement("writer.endObject()")
   return builder.build()
 }
-private fun CodeGenerationAst.Field.writeCode(): CodeBlock {
+
+private fun CodeGenerationAst.Field.writeCode(valueName: String): CodeBlock {
   return CodeBlock.builder().apply {
-    addStatement("writer.name(%S)", name)
-    addStatement("${kotlinNameForAdapterField(type)}.toResponse(writer, value.${name.escapeKotlinReservedWord()})")
+    addStatement("writer.name(%S)", responseName)
+    addStatement("${kotlinNameForAdapterField(type)}.toResponse(writer, $valueName.${kotlinNameForField(responseName)})")
   }.build()
 }

@@ -84,7 +84,8 @@ interface Operation<D : Operation.Data> {
       }
 
       override fun toResponse(writer: JsonWriter, customScalarAdapters: CustomScalarAdapters) {
-        // write nothing
+        writer.beginObject()
+        writer.endObject()
       }
 
     }

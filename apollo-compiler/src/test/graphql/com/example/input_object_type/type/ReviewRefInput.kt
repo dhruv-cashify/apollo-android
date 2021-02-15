@@ -5,9 +5,11 @@
 //
 package com.example.input_object_type.type
 
+import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.api.InputType
-import com.apollographql.apollo.api.internal.InputFieldMarshaller
+import com.apollographql.apollo.api.internal.ResponseAdapter
+import com.example.input_object_type.type.adapter.ReviewRefInput_ResponseAdapter
 import kotlin.Suppress
 
 /**
@@ -18,10 +20,12 @@ import kotlin.Suppress
     "RemoveRedundantQualifierName")
 data class ReviewRefInput(
   val reviewInput: Input<ReviewInput> = Input.absent()
-) : InputType {
-  override fun marshaller(): InputFieldMarshaller = InputFieldMarshaller.invoke { writer ->
-    if (this@ReviewRefInput.reviewInput.defined) {
-      writer.writeObject("reviewInput", this@ReviewRefInput.reviewInput.value?.marshaller())
+) : InputType<ReviewRefInput> {
+  override fun adapter(customScalarAdapters: CustomScalarAdapters):
+      ResponseAdapter<ReviewRefInput> {
+    val adapter = customScalarAdapters.getInputObjectAdapter("ReviewRefInput") {
+      ReviewRefInput_ResponseAdapter(customScalarAdapters)
     }
+    return adapter
   }
 }

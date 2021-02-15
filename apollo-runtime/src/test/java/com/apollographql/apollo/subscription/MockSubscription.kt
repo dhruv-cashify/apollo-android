@@ -5,6 +5,8 @@ import com.apollographql.apollo.api.Operation
 import com.apollographql.apollo.api.ResponseField
 import com.apollographql.apollo.api.Subscription
 import com.apollographql.apollo.api.internal.InputFieldMarshaller
+import com.apollographql.apollo.api.internal.anyResponseAdapter
+import com.apollographql.apollo.api.internal.json.JsonWriter
 
 class MockSubscription(
     private val queryDocument: String = "subscription{commentAdded{id  name}",
@@ -14,19 +16,12 @@ class MockSubscription(
 ) : Subscription<Operation.Data> {
   override fun queryDocument(): String = queryDocument
 
-  override fun variables(): Operation.Variables = object : Operation.Variables() {
+  override fun variables(): Operation.Variables = object : Operation.Variables {
     override fun valueMap(): Map<String, Any?> = variables
 
-    override fun marshaller(): InputFieldMarshaller =
-        InputFieldMarshaller { writer ->
-          for ((name, value) in variables.entries) {
-            when (value) {
-              is Number -> writer.writeNumber(name, value)
-              is Boolean -> writer.writeBoolean(name, value)
-              else -> writer.writeString(name, value.toString())
-            }
-          }
-        }
+    override fun toResponse(writer: JsonWriter, customScalarAdapters: CustomScalarAdapters) {
+      anyResponseAdapter.toResponse(writer, variables)
+    }
   }
 
   override fun adapter(customScalarAdapters: CustomScalarAdapters) = throw UnsupportedOperationException()

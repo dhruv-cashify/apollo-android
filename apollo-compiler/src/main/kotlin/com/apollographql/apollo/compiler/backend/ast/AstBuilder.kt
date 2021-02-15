@@ -1,6 +1,8 @@
 package com.apollographql.apollo.compiler.backend.ast
 
 import com.apollographql.apollo.api.Operation
+import com.apollographql.apollo.compiler.backend.codegen.kotlinNameForField
+import com.apollographql.apollo.compiler.backend.codegen.kotlinNameForVariable
 import com.apollographql.apollo.compiler.backend.ir.BackendIr
 import com.apollographql.apollo.compiler.backend.ir.SelectionKey
 import com.apollographql.apollo.compiler.introspection.IntrospectionSchema
@@ -156,14 +158,21 @@ internal class AstBuilder private constructor(
       else -> toString()
     }
   }
-
   private fun IntrospectionSchema.TypeRef.resolveInputFieldType(typesPackageName: String): CodeGenerationAst.FieldType {
-    return when (this.kind) {
-      IntrospectionSchema.Kind.NON_NULL -> this.ofType!!.resolveInputFieldType(
-          typesPackageName = typesPackageName
-      ).let {
-        (it as CodeGenerationAst.FieldType.Input).rawType
+    return resolveInputFieldTypeRecursive(typesPackageName).let {
+      if (it.nullable) {
+        CodeGenerationAst.FieldType.Input(it.nonNullable())
+      } else {
+        it
       }
+    }
+  }
+
+  private fun IntrospectionSchema.TypeRef.resolveInputFieldTypeRecursive(typesPackageName: String): CodeGenerationAst.FieldType {
+    return when (this.kind) {
+      IntrospectionSchema.Kind.NON_NULL -> this.ofType!!.resolveInputFieldTypeRecursive(
+          typesPackageName = typesPackageName
+      ).nonNullable()
 
       IntrospectionSchema.Kind.ENUM -> CodeGenerationAst.FieldType.Scalar.Enum(
           nullable = true,
@@ -204,7 +213,7 @@ internal class AstBuilder private constructor(
 
       IntrospectionSchema.Kind.LIST -> CodeGenerationAst.FieldType.Array(
           nullable = true,
-          rawType = this.ofType!!.resolveInputFieldType(
+          rawType = this.ofType!!.resolveInputFieldTypeRecursive(
               typesPackageName = typesPackageName
           ),
       )
@@ -335,17 +344,23 @@ internal class AstBuilder private constructor(
     )
   }
 
-  private fun BackendIr.Variable.toAst(): CodeGenerationAst.InputField {
+  private fun BackendIr.Variable.toAst(): CodeGenerationAst.Field {
     val fieldType = type.resolveInputFieldType(
         typesPackageName = typesPackageName
     )
-    return CodeGenerationAst.InputField(
-        name = name.toLowerCamelCase(),
+    val fieldName = kotlinNameForVariable(name)
+    return CodeGenerationAst.Field(
+        name = fieldName,
+        responseName = name,
         schemaName = name,
         deprecationReason = null,
         type = fieldType,
         description = "",
         defaultValue = null,
+        isInput = true,
+        conditions = emptySet(),
+        override = false,
+        arguments = emptyMap()
     )
   }
 

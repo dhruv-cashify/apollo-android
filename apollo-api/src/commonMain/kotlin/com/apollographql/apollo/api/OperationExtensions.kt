@@ -178,3 +178,10 @@ fun <D : Operation.Data, M: Map<String, Any?>> Operation<D>.parseData(
     adapter(customScalarAdapters).fromResponse(it)
   }
 }
+
+
+fun Operation.Variables.toJson(customScalarAdapters: CustomScalarAdapters): String {
+  return Buffer().apply {
+    toResponse(JsonUtf8Writer(this), customScalarAdapters)
+  }.readUtf8()
+}

@@ -5,9 +5,11 @@
 //
 package com.example.input_object_type.type
 
+import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.Input
 import com.apollographql.apollo.api.InputType
-import com.apollographql.apollo.api.internal.InputFieldMarshaller
+import com.apollographql.apollo.api.internal.ResponseAdapter
+import com.example.input_object_type.type.adapter.ColorInput_ResponseAdapter
 import kotlin.Double
 import kotlin.Int
 import kotlin.Suppress
@@ -39,19 +41,11 @@ data class ColorInput(
    * Circle ref to review input
    */
   val reviewRefInput: Input<ReviewRefInput> = Input.absent()
-) : InputType {
-  override fun marshaller(): InputFieldMarshaller = InputFieldMarshaller.invoke { writer ->
-    writer.writeInt("red", this@ColorInput.red)
-    if (this@ColorInput.green.defined) {
-      writer.writeDouble("green", this@ColorInput.green.value)
+) : InputType<ColorInput> {
+  override fun adapter(customScalarAdapters: CustomScalarAdapters): ResponseAdapter<ColorInput> {
+    val adapter = customScalarAdapters.getInputObjectAdapter("ColorInput") {
+      ColorInput_ResponseAdapter(customScalarAdapters)
     }
-    writer.writeDouble("blue", this@ColorInput.blue)
-    if (this@ColorInput.enumWithDefaultValue.defined) {
-      writer.writeString("enumWithDefaultValue",
-          this@ColorInput.enumWithDefaultValue.value?.rawValue)
-    }
-    if (this@ColorInput.reviewRefInput.defined) {
-      writer.writeObject("reviewRefInput", this@ColorInput.reviewRefInput.value?.marshaller())
-    }
+    return adapter
   }
 }

@@ -16,6 +16,7 @@ class CustomScalarAdapters(val customScalarAdapters: Map<CustomScalar, CustomSca
 
   private val adapterByQueryName = mutableMapOf<String, ResponseAdapter<*>>()
   private val adapterByFragmentName = mutableMapOf<String, ResponseAdapter<*>>()
+  private val adapterByInputObjectName = mutableMapOf<String, ResponseAdapter<*>>()
 
   @Suppress("UNCHECKED_CAST")
   fun <T : Any> adapterFor(customScalar: CustomScalar): CustomScalarAdapter<T> {
@@ -55,6 +56,11 @@ class CustomScalarAdapters(val customScalarAdapters: Map<CustomScalar, CustomSca
     return adapterByFragmentName.getOrPut(fragmentName, defaultValue) as ResponseAdapter<D>
   }
 
+  @Synchronized
+  @Suppress("UNCHECKED_CAST")
+  fun <D> getInputObjectAdapter(inputObjectName: String, defaultValue: () -> ResponseAdapter<D>): ResponseAdapter<D> {
+    return adapterByInputObjectName.getOrPut(inputObjectName, defaultValue) as ResponseAdapter<D>
+  }
 
   class CustomResponseAdapter<T: Any>(private val wrappedAdapter: CustomScalarAdapter<T>) : ResponseAdapter<T> {
     override fun fromResponse(reader: JsonReader): T {

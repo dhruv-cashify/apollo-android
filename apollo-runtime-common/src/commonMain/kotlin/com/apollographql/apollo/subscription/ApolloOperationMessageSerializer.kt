@@ -8,6 +8,7 @@ import com.apollographql.apollo.api.internal.json.Utils
 import com.apollographql.apollo.api.internal.json.Utils.readRecursively
 import com.apollographql.apollo.api.internal.json.use
 import com.apollographql.apollo.api.internal.json.writeObject
+import com.apollographql.apollo.api.toJson
 import okio.BufferedSink
 import okio.BufferedSource
 import okio.IOException
@@ -82,7 +83,7 @@ object ApolloOperationMessageSerializer : OperationMessageSerializer {
 
   internal fun OperationClientMessage.Start.writePayloadContentsTo(writer: JsonWriter) {
     with(writer) {
-      name(JSON_KEY_VARIABLES).jsonValue(subscription.variables().marshal(customScalarAdapters))
+      name(JSON_KEY_VARIABLES).jsonValue(subscription.variables().toJson(customScalarAdapters))
       name(JSON_KEY_OPERATION_NAME).value(subscription.name())
       if (!autoPersistSubscription || sendSubscriptionDocument) {
         name(JSON_KEY_QUERY).value(subscription.queryDocument())

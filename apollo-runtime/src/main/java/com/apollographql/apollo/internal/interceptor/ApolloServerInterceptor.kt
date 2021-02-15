@@ -12,6 +12,7 @@ import com.apollographql.apollo.api.composeRequestBody
 import com.apollographql.apollo.api.internal.ApolloLogger
 import com.apollographql.apollo.api.internal.json.InputFieldJsonWriter
 import com.apollographql.apollo.api.internal.json.JsonWriter.Companion.of
+import com.apollographql.apollo.api.toJson
 import com.apollographql.apollo.cache.ApolloCacheHeaders
 import com.apollographql.apollo.cache.CacheHeaders
 import com.apollographql.apollo.exception.ApolloNetworkException
@@ -184,7 +185,7 @@ class ApolloServerInterceptor(
 
     @Throws(IOException::class)
     fun httpGetUrl(serverUrl: HttpUrl, operation: Operation<*>,
-                   customScalarAdapters: CustomScalarAdapters?, writeQueryDocument: Boolean,
+                   customScalarAdapters: CustomScalarAdapters, writeQueryDocument: Boolean,
                    autoPersistQueries: Boolean): HttpUrl {
       val urlBuilder = serverUrl.newBuilder()
       if (!autoPersistQueries || writeQueryDocument) {
@@ -202,12 +203,12 @@ class ApolloServerInterceptor(
 
     @Throws(IOException::class)
     fun addVariablesUrlQueryParameter(urlBuilder: HttpUrl.Builder, operation: Operation<*>,
-                                      customScalarAdapters: CustomScalarAdapters?) {
+                                      customScalarAdapters: CustomScalarAdapters) {
       val buffer = Buffer()
       val jsonWriter = of(buffer)
       jsonWriter.serializeNulls = true
       jsonWriter.beginObject()
-      operation.variables().marshaller().marshal(InputFieldJsonWriter(jsonWriter, customScalarAdapters!!))
+      operation.variables().toResponse(jsonWriter, customScalarAdapters)
       jsonWriter.endObject()
       jsonWriter.close()
       urlBuilder.addQueryParameter("variables", buffer.readUtf8())
@@ -231,7 +232,7 @@ class ApolloServerInterceptor(
 
     private fun recursiveGetUploadData(value: Any?, variableName: String, allUploads: ArrayList<FileUploadMeta>) {
       when (value) {
-        is InputType -> {
+        is InputType<*> -> {
           // Input object
           try {
             val fields = value.javaClass.declaredFields

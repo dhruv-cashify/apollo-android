@@ -12,6 +12,7 @@ import com.apollographql.apollo.api.Operation
 import com.apollographql.apollo.api.composeRequestBody
 import com.apollographql.apollo.api.parse
 import com.apollographql.apollo.ApolloRequest
+import com.apollographql.apollo.api.toJson
 import com.apollographql.apollo.interceptor.ApolloResponse
 import com.apollographql.apollo.network.HttpExecutionContext
 import com.apollographql.apollo.network.HttpMethod
@@ -177,7 +178,7 @@ actual class ApolloHttpNetworkTransport(
         .addQueryParameter("query", operation.queryDocument())
         .addQueryParameter("operationName", operation.name())
         .apply {
-          operation.variables().marshal(customScalarAdapters).let { variables ->
+          operation.variables().toJson(customScalarAdapters).let { variables ->
             if (variables.isNotEmpty()) addQueryParameter("variables", variables)
           }
         }

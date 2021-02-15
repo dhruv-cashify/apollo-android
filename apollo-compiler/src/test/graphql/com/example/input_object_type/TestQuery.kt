@@ -9,12 +9,14 @@ import com.apollographql.apollo.api.CustomScalarAdapters
 import com.apollographql.apollo.api.Mutation
 import com.apollographql.apollo.api.Operation
 import com.apollographql.apollo.api.ResponseField
-import com.apollographql.apollo.api.internal.InputFieldMarshaller
 import com.apollographql.apollo.api.internal.QueryDocumentMinifier
 import com.apollographql.apollo.api.internal.ResponseAdapter
+import com.apollographql.apollo.api.internal.json.JsonWriter
 import com.example.input_object_type.adapter.TestQuery_ResponseAdapter
 import com.example.input_object_type.type.Episode
+import com.example.input_object_type.type.Episode_ResponseAdapter
 import com.example.input_object_type.type.ReviewInput
+import com.example.input_object_type.type.adapter.ReviewInput_ResponseAdapter
 import kotlin.Any
 import kotlin.Int
 import kotlin.String
@@ -31,17 +33,21 @@ data class TestQuery(
   val review: ReviewInput
 ) : Mutation<TestQuery.Data> {
   @Transient
-  private val variables: Operation.Variables = object : Operation.Variables() {
+  private val variables: Operation.Variables = object : Operation.Variables {
     override fun valueMap(): Map<String, Any?> = mutableMapOf<String, Any?>().apply {
       this["ep"] = this@TestQuery.ep
       this["review"] = this@TestQuery.review
     }
 
-    override fun marshaller(): InputFieldMarshaller {
-      return InputFieldMarshaller.invoke { writer ->
-        writer.writeString("ep", this@TestQuery.ep.rawValue)
-        writer.writeObject("review", this@TestQuery.review.marshaller())
-      }
+    override fun toResponse(writer: JsonWriter, customScalarAdapters: CustomScalarAdapters) {
+      val episodeAdapter = Episode_ResponseAdapter
+      val reviewInputAdapter = ReviewInput_ResponseAdapter(customScalarAdapters)
+      writer.beginObject()
+      writer.name("ep")
+      episodeAdapter.toResponse(writer, this@TestQuery.ep)
+      writer.name("review")
+      reviewInputAdapter.toResponse(writer, this@TestQuery.review)
+      writer.endObject()
     }
   }
 
